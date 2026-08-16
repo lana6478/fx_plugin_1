@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "Distortion.h"
+#include "StepFilterType.h"
 
 // Number of steps in the sequencer. Kept fixed for v1 to keep the parameter
 // layout simple; a future version could make this switchable.
@@ -60,6 +61,36 @@ private:
 
     juce::LinearSmoothedValue<float> smoothedMix;
     juce::LinearSmoothedValue<float> smoothedOutputGain;
+
+    // A frozen copy of one step's parameters, captured at the moment the
+    // sequencer switches steps. Frozen so that the "outgoing" side of a
+    // crossfade keeps sounding consistent even while the live parameter
+    // values underneath it keep changing.
+    struct StepSnapshot
+    {
+        bool enabled = true;
+        DistortionType distortionType = DistortionType::clean;
+        float drive = 0.0f;
+        StepFilterType filterType = StepFilterType::off;
+        float filterCutoff = 1000.0f;
+        float filterResonance = 0.707f;
+    };
+
+    // Two filter voices so one can keep ringing out the previous step's
+    // settings while the other takes over the new step, crossfaded between
+    // over a duration set by the new step's "smoothness" parameter. Each
+    // filter handles all channels internally (StateVariableTPTFilter is
+    // multichannel via prepare()/processSample(channel, x)).
+    juce::dsp::StateVariableTPTFilter<float> voiceFilterA, voiceFilterB;
+
+    int previousStepIndexProcessed = -1;
+    bool voiceAIsActive = true;
+    StepSnapshot outgoingSnapshot, incomingSnapshot;
+    int crossfadeSamplesRemaining = 0;
+    int crossfadeTotalSamples = 1;
+
+    float processStepVoice (juce::dsp::StateVariableTPTFilter<float>& filter,
+                             const StepSnapshot& snapshot, float dry, int channel) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepDistortAudioProcessor)
 };

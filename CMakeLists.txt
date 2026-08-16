@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 
+if (APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    # Build universal (Intel + Apple Silicon) so the plugin loads whether the
+    # host DAW is running natively or translated under Rosetta.
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
+endif()
+
 project(StepDistort VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -15,11 +21,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(StepDistort
-    COMPANY_NAME "DIY Audio"
-    PLUGIN_MANUFACTURER_CODE Diya
-    PLUGIN_CODE Sdi1
+    COMPANY_NAME "WAVFORM AUDIO"
+    BUNDLE_ID "com.wavformaudio.carnage"
+    PLUGIN_MANUFACTURER_CODE Wvfm
+    PLUGIN_CODE Crng
     FORMATS AU VST3 Standalone
-    PRODUCT_NAME "StepDistort"
+    PRODUCT_NAME "CARNAGE"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -35,6 +42,9 @@ juce_generate_juce_header(StepDistort)
 target_sources(StepDistort PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/StepStrip.cpp
+    Source/DistortionCurveDisplay.cpp
+    Source/StepDistortLookAndFeel.cpp
 )
 
 target_compile_definitions(StepDistort PUBLIC
