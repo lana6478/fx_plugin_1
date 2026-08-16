@@ -1,8 +1,9 @@
-# StepDistort
+# CARNAGE
 
-A distortion audio plugin (VST3 / AU) built with [JUCE](https://juce.com). Instead of
-one fixed distortion sound, it runs an 8-step sequencer that cycles through a
-different distortion type and drive level per step, synced to your DAW's tempo.
+A distortion audio plugin (VST3 / AU) by **WAVFORM AUDIO**, built with
+[JUCE](https://juce.com). Instead of one fixed distortion sound, it runs an
+8-step sequencer that cycles through a different distortion type, drive level,
+and filter per step, synced to your DAW's tempo.
 
 Built to run inside FL Studio (or any VST3/AU host) as an effect on a mixer track.
 
@@ -10,10 +11,14 @@ Built to run inside FL Studio (or any VST3/AU host) as an effect on a mixer trac
 
 - 8 steps, each with:
   - On/off
-  - Distortion type: Clean, Soft Clip, Hard Clip, Foldback, Bitcrush
+  - Distortion type: Clean, Soft Clip, Hard Clip, Foldback, Bitcrush,
+    Saturation, Overdrive, Fuzz, Tape, Tube
   - Drive amount
+  - Filter: Off, Low Pass, High Pass, Band Pass, with cutoff and resonance
 - Step rate (1/4, 1/8, 1/16, 1/8 triplet, 1/16 triplet, 1/32), synced to host BPM
-- Global dry/wet Mix and Output Gain
+- Global dry/wet Mix, Output Gain, and Smoothness (crossfades each step
+  transition to remove hard clipping/clicking between steps)
+- Each step shows a live plot of its distortion curve
 - The UI highlights whichever step is currently playing
 
 This is a v1 — 8 steps are fixed for now, and there's no preset save/load beyond
@@ -76,8 +81,8 @@ The first build will take a while — CMake automatically downloads JUCE itself
 The build is configured to copy the plugin into the standard macOS plugin
 folders automatically, so after step 3 you should already find:
 
-- `~/Library/Audio/Plug-Ins/VST3/StepDistort.vst3`
-- `~/Library/Audio/Plug-Ins/Components/StepDistort.component` (AU)
+- `~/Library/Audio/Plug-Ins/VST3/CARNAGE.vst3`
+- `~/Library/Audio/Plug-Ins/Components/CARNAGE.component` (AU)
 
 If they're not there, copy them manually from inside `build/StepDistort_artefacts/Release/`.
 
@@ -86,14 +91,14 @@ If they're not there, copy them manually from inside `build/StepDistort_artefact
 1. Open FL Studio
 2. **Options → Manage Plugins**, then click **Find plugins** (or **Find more
    plugins**) to rescan
-3. Once it's found, add **StepDistort** as an effect on a mixer insert
+3. Once it's found, add **CARNAGE** as an effect on a mixer insert
    (right-click an empty effect slot → select it from the list)
 4. Press play in FL Studio — the step highlight in the plugin UI should move
    in time with the transport, and the sound passing through that insert will
    be distorted differently per step
 
 There's also a **Standalone** app built alongside the plugin
-(`build/StepDistort_artefacts/Release/Standalone/StepDistort.app`) you can
+(`build/StepDistort_artefacts/Release/Standalone/CARNAGE.app`) you can
 launch directly to hear it without opening FL Studio — useful for quick
 tweaking. With no host transport it free-runs at 120 BPM.
 
@@ -102,14 +107,19 @@ tweaking. With no host transport it free-runs at 120 BPM.
 ```
 CMakeLists.txt          Build configuration (fetches JUCE, defines the plugin targets)
 Source/
-  PluginProcessor.h/.cpp   Audio engine: parameters, step sequencer clock, DSP
-  PluginEditor.h/.cpp      UI: step grid, top bar controls
-  Distortion.h             The actual distortion algorithms
+  PluginProcessor.h/.cpp      Audio engine: parameters, step sequencer clock, DSP
+  PluginEditor.h/.cpp         UI: top bar controls, centred title, step row
+  StepStrip.h/.cpp            One step's card: controls + curve display
+  DistortionCurveDisplay.h/.cpp  Live per-step distortion curve plot
+  StepDistortLookAndFeel.h/.cpp  Shared theme: colours, fonts, knob/button drawing
+  SliderFormatting.h          Shared knob value-display formatting
+  Distortion.h                 The distortion algorithms
+  StepFilterType.h             The per-step filter type enum/names
 ```
 
 ## Ideas for later
 
 - Variable step count (4/16/32) instead of fixed at 8
-- Per-step stereo width / filter
+- Per-step stereo width
 - Swing
 - Preset save/load UI (beyond DAW project state)

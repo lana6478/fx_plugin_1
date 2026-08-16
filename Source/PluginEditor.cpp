@@ -1,13 +1,21 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SliderFormatting.h"
 
 StepDistortAudioProcessorEditor::StepDistortAudioProcessorEditor (StepDistortAudioProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
+    using namespace StepDistortColours;
     using APVTS = juce::AudioProcessorValueTreeState;
 
-    // --- top bar: step rate, mix, output gain -----------------------------
-    stepRateLabel.setJustificationType (juce::Justification::centredRight);
+    setLookAndFeel (&lookAndFeel);
+
+    const auto headerLabelFont = industrialFont (12.0f).withExtraKerningFactor (0.04f);
+
+    // --- header: title (custom-painted, see paint()) + global controls -----
+    stepRateLabel.setText ("STEP RATE", juce::dontSendNotification);
+    stepRateLabel.setJustificationType (juce::Justification::centred);
+    stepRateLabel.setFont (headerLabelFont);
     addAndMakeVisible (stepRateLabel);
 
     stepRateBox.addItemList (StepDistortAudioProcessor::getStepRateNames(), 1);
@@ -15,105 +23,155 @@ StepDistortAudioProcessorEditor::StepDistortAudioProcessorEditor (StepDistortAud
     stepRateAttachment = std::make_unique<APVTS::ComboBoxAttachment> (
         processorRef.apvts, "stepRate", stepRateBox);
 
-    mixLabel.setJustificationType (juce::Justification::centredRight);
+    mixLabel.setText ("MIX", juce::dontSendNotification);
+    mixLabel.setJustificationType (juce::Justification::centred);
+    mixLabel.setFont (headerLabelFont);
     addAndMakeVisible (mixLabel);
 
-    mixSlider.setSliderStyle (juce::Slider::LinearHorizontal);
-    mixSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 20);
+    mixSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    mixSlider.setPopupDisplayEnabled (true, true, this);
+    SliderFormatting::configurePercentDisplay (mixSlider);
     addAndMakeVisible (mixSlider);
     mixAttachment = std::make_unique<APVTS::SliderAttachment> (processorRef.apvts, "mix", mixSlider);
 
-    outputGainLabel.setJustificationType (juce::Justification::centredRight);
+    outputGainLabel.setText ("OUTPUT GAIN", juce::dontSendNotification);
+    outputGainLabel.setJustificationType (juce::Justification::centred);
+    outputGainLabel.setFont (headerLabelFont);
     addAndMakeVisible (outputGainLabel);
 
-    outputGainSlider.setSliderStyle (juce::Slider::LinearHorizontal);
-    outputGainSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 20);
+    outputGainSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    outputGainSlider.setPopupDisplayEnabled (true, true, this);
+    SliderFormatting::configureDbDisplay (outputGainSlider);
     addAndMakeVisible (outputGainSlider);
     outputGainAttachment = std::make_unique<APVTS::SliderAttachment> (
         processorRef.apvts, "outputGain", outputGainSlider);
 
-    // --- one column of controls per step -----------------------------------
-    const auto& typeNames = getDistortionTypeNames();
+    smoothnessLabel.setText ("SMOOTHNESS", juce::dontSendNotification);
+    smoothnessLabel.setJustificationType (juce::Justification::centred);
+    smoothnessLabel.setFont (headerLabelFont);
+    addAndMakeVisible (smoothnessLabel);
 
+    smoothnessSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    smoothnessSlider.setPopupDisplayEnabled (true, true, this);
+    SliderFormatting::configurePercentDisplay (smoothnessSlider);
+    addAndMakeVisible (smoothnessSlider);
+    smoothnessAttachment = std::make_unique<APVTS::SliderAttachment> (
+        processorRef.apvts, "smoothness", smoothnessSlider);
+
+    // --- one card per step ---------------------------------------------------
     for (int s = 0; s < numSteps; ++s)
     {
-        auto& c = stepControls[(size_t) s];
-        const auto prefix = "step" + juce::String (s);
-
-        c.enabledButton.setButtonText (juce::String (s + 1));
-        addAndMakeVisible (c.enabledButton);
-        c.enabledAttachment = std::make_unique<APVTS::ButtonAttachment> (
-            processorRef.apvts, prefix + "Enabled", c.enabledButton);
-
-        c.typeBox.addItemList (typeNames, 1);
-        addAndMakeVisible (c.typeBox);
-        c.typeAttachment = std::make_unique<APVTS::ComboBoxAttachment> (
-            processorRef.apvts, prefix + "Type", c.typeBox);
-
-        c.driveSlider.setSliderStyle (juce::Slider::LinearVertical);
-        c.driveSlider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        addAndMakeVisible (c.driveSlider);
-        c.driveAttachment = std::make_unique<APVTS::SliderAttachment> (
-            processorRef.apvts, prefix + "Drive", c.driveSlider);
+        stepStrips[(size_t) s] = std::make_unique<StepStrip> (processorRef.apvts, s);
+        addAndMakeVisible (*stepStrips[(size_t) s]);
     }
 
-    setSize (820, 420);
+    setResizable (true, true);
+    setResizeLimits (1200, 420, 2600, 900);
+    setSize (2040, 560);
+
     startTimerHz (30);
 }
 
 StepDistortAudioProcessorEditor::~StepDistortAudioProcessorEditor()
 {
     stopTimer();
+    setLookAndFeel (nullptr);
 }
 
 void StepDistortAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colours::black);
+    using namespace StepDistortColours;
 
-    const int active = processorRef.currentStepIndex.load (std::memory_order_relaxed);
-    if (active >= 0 && active < numSteps)
-    {
-        g.setColour (juce::Colours::darkorange.withAlpha (0.35f));
-        g.fillRect (stepControls[(size_t) active].columnBounds);
-    }
+    auto bounds = getLocalBounds().toFloat();
 
-    g.setColour (juce::Colours::white);
-    g.setFont (24.0f);
-    g.drawText ("StepDistort", getLocalBounds().removeFromTop (40), juce::Justification::centred);
+    // Warm furnace-glow vignette: brighter near the header, fading to
+    // near-black at the edges.
+    juce::ColourGradient vignette (juce::Colour (0xff20100a), bounds.getCentreX(), 20.0f,
+                                    background, bounds.getCentreX(), bounds.getBottom(), true);
+    g.setGradientFill (vignette);
+    g.fillRect (bounds);
+
+    // Glowing molten-metal title logo, italic-slanted to match the step
+    // cards, centred in the middle of the header between the knob groups.
+    juce::GlyphArrangement glyphs;
+    const auto titleFont = industrialFont (46.0f).withExtraKerningFactor (0.04f).italicised();
+    glyphs.addLineOfText (titleFont, "CARNAGE", 0.0f, 0.0f);
+    juce::Path titlePath;
+    glyphs.createPath (titlePath);
+
+    auto textBounds = titlePath.getBounds();
+    const float tx = (float) titleBounds.getCentreX() - textBounds.getCentreX();
+    const float ty = (float) titleBounds.getBottom() - textBounds.getBottom();
+    titlePath.applyTransform (juce::AffineTransform::translation (tx, ty));
+
+    juce::DropShadow titleGlow (accentAlt.withAlpha (0.7f), 22, {});
+    titleGlow.drawForPath (g, titlePath);
+
+    auto titlePathBounds = titlePath.getBounds();
+    juce::ColourGradient titleFill (emberHot, titlePathBounds.getX(), titlePathBounds.getY(),
+                                     accentAlt, titlePathBounds.getX(), titlePathBounds.getBottom(), false);
+    g.setGradientFill (titleFill);
+    g.fillPath (titlePath);
+
+    // Glowing seam separating the header from the step row.
+    auto seam = juce::Rectangle<float> (bounds.getX() + 12.0f, (float) titleBounds.getBottom() + 42.0f,
+                                         bounds.getWidth() - 24.0f, 2.0f);
+    juce::Path seamPath;
+    seamPath.addRectangle (seam);
+    juce::DropShadow seamGlow (accentAlt.withAlpha (0.45f), 12, {});
+    seamGlow.drawForPath (g, seamPath);
+
+    juce::ColourGradient seamGrad (accentAlt, seam.getX(), 0.0f, emberHot, seam.getRight(), 0.0f, false);
+    g.setGradientFill (seamGrad);
+    g.fillRect (seam);
 }
 
 void StepDistortAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().reduced (10);
+    auto area = getLocalBounds().reduced (12);
 
-    area.removeFromTop (40); // title drawn in paint()
+    auto header = area.removeFromTop (86);
 
-    auto topBar = area.removeFromTop (30);
-    stepRateLabel.setBounds (topBar.removeFromLeft (70));
-    stepRateBox.setBounds (topBar.removeFromLeft (110));
-    topBar.removeFromLeft (20);
-    mixLabel.setBounds (topBar.removeFromLeft (40));
-    mixSlider.setBounds (topBar.removeFromLeft (150));
-    topBar.removeFromLeft (20);
-    outputGainLabel.setBounds (topBar.removeFromLeft (90));
-    outputGainSlider.setBounds (topBar.removeFromLeft (150));
+    auto layoutHeaderControl = [] (juce::Rectangle<int>& remaining, int width,
+                                    juce::Label& label, juce::Component& control)
+    {
+        auto slot = remaining.removeFromLeft (width);
+        label.setBounds (slot.removeFromTop (18));
+        control.setBounds (slot);
+    };
 
-    area.removeFromTop (16);
+    // Left group: Mix, Output Gain.
+    auto leftGroup = header.removeFromLeft (100 + 20 + 110);
+    layoutHeaderControl (leftGroup, 100, mixLabel, mixSlider);
+    leftGroup.removeFromLeft (20);
+    layoutHeaderControl (leftGroup, 110, outputGainLabel, outputGainSlider);
 
-    const int colWidth = area.getWidth() / numSteps;
+    header.removeFromLeft (24);
+
+    // Right group: Step Rate, Smoothness.
+    auto rightGroup = header.removeFromRight (130 + 20 + 100);
+    auto stepRateSlot = rightGroup.removeFromLeft (130);
+    stepRateLabel.setBounds (stepRateSlot.removeFromTop (18));
+    stepRateSlot.removeFromTop (2);
+    stepRateBox.setBounds (stepRateSlot.removeFromTop (26));
+    rightGroup.removeFromLeft (20);
+    layoutHeaderControl (rightGroup, 100, smoothnessLabel, smoothnessSlider);
+
+    header.removeFromRight (24);
+
+    // Whatever's left in the middle is the centred title zone (see paint()).
+    titleBounds = header;
+
+    area.removeFromTop (10);
+
+    const int spacing = 6;
+    const int colWidth = (area.getWidth() - spacing * (numSteps - 1)) / numSteps;
 
     for (int s = 0; s < numSteps; ++s)
     {
-        auto& c = stepControls[(size_t) s];
-        auto fullCol = area.removeFromLeft (colWidth);
-        c.columnBounds = fullCol;
-
-        auto col = fullCol.reduced (4);
-        c.enabledButton.setBounds (col.removeFromTop (24));
-        col.removeFromTop (4);
-        c.typeBox.setBounds (col.removeFromTop (24));
-        col.removeFromTop (6);
-        c.driveSlider.setBounds (col);
+        auto col = area.removeFromLeft (colWidth);
+        stepStrips[(size_t) s]->setBounds (col);
+        area.removeFromLeft (spacing);
     }
 }
 
@@ -122,7 +180,12 @@ void StepDistortAudioProcessorEditor::timerCallback()
     const int current = processorRef.currentStepIndex.load (std::memory_order_relaxed);
     if (current != lastDrawnStep)
     {
+        if (lastDrawnStep >= 0 && lastDrawnStep < numSteps)
+            stepStrips[(size_t) lastDrawnStep]->setActive (false);
+
+        if (current >= 0 && current < numSteps)
+            stepStrips[(size_t) current]->setActive (true);
+
         lastDrawnStep = current;
-        repaint();
     }
 }
