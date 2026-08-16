@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 
+if (APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    # Build universal (Intel + Apple Silicon) so the plugin loads whether the
+    # host DAW is running natively or translated under Rosetta.
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
+endif()
+
 project(StepDistort VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -16,6 +22,7 @@ FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(StepDistort
     COMPANY_NAME "DIY Audio"
+    BUNDLE_ID "com.diyaudio.StepDistort"
     PLUGIN_MANUFACTURER_CODE Diya
     PLUGIN_CODE Sdi1
     FORMATS AU VST3 Standalone
