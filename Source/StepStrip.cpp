@@ -76,19 +76,10 @@ void StepStrip::paint (juce::Graphics& g)
 
     auto bounds = getLocalBounds().toFloat().reduced (2.0f);
 
-    // Slanted parallelogram card (leaning like the italic title font) with
-    // sharp corners instead of a soft bevel, for a harder-edged look.
-    const float skew = juce::jmin (16.0f, bounds.getHeight() * 0.09f);
-
-    juce::Path shape;
-    shape.startNewSubPath (bounds.getX() + skew, bounds.getY());
-    shape.lineTo (bounds.getRight(), bounds.getY());
-    shape.lineTo (bounds.getRight() - skew, bounds.getBottom());
-    shape.lineTo (bounds.getX(), bounds.getBottom());
-    shape.closeSubPath();
-
     if (active)
     {
+        juce::Path shape;
+        shape.addRoundedRectangle (bounds, 6.0f);
         juce::DropShadow glow (accentAlt.withAlpha (0.55f), 18, {});
         glow.drawForPath (g, shape);
     }
@@ -97,17 +88,15 @@ void StepStrip::paint (juce::Graphics& g)
                                     active ? juce::Colour (0xff180a06) : juce::Colour (0xff17100e),
                                     bounds.getX(), bounds.getBottom(), false);
     g.setGradientFill (cardGrad);
-    g.fillPath (shape);
+    g.fillRoundedRectangle (bounds, 6.0f);
 
     g.setColour (active ? accentAlt : panelOutline);
-    g.strokePath (shape, juce::PathStrokeType (active ? 2.0f : 1.0f));
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 6.0f, active ? 2.0f : 1.0f);
 }
 
 void StepStrip::resized()
 {
-    // Slightly larger margin than a plain rectangle would need, so content
-    // clears the slanted top-left/bottom-right corners drawn in paint().
-    auto area = getLocalBounds().reduced (14);
+    auto area = getLocalBounds().reduced (8);
 
     auto header = area.removeFromTop (24);
     enabledButton.setBounds (header.removeFromLeft (28));
